@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Context Engineering Lab — Can You Trust Your AI Coach?</title>
+  <meta name="description" content="Interactive workshop companion for the Context Engineering Lab presentation by Ben Marino. Explore AI blind spots in coaching." />
+  <meta property="og:title" content="Context Engineering Lab — Can You Trust Your AI Coach?" />
+  <meta property="og:description" content="Interactive workshop: discover how AI coaching blind spots affect athlete safety." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#0C0A1A" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: linear-gradient(145deg, #0c0a1a 0%, #1a1333 40%, #0f172a 100%);
+      color: #e2e8f0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    button { font-family: inherit; cursor: pointer; border: none; outline: none; -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const STEPS = [
+      "welcome",
+      "persona_intro",
+      "persona_predict",
+      "persona_reveal",
+      "dumbzone_intro",
+      "dumbzone_predict",
+      "dumbzone_reveal",
+      "providers_intro",
+      "providers_reveal",
+      "compression_intro",
+      "compression_reveal",
+      "takeaways",
+    ];
+
+    const JOURNAL_PREVIEW = [
+      { day: "Day 1", mood: "\u{1F60A}", summary: "Started 16-week marathon block. Easy 8km, legs fresh." },
+      { day: "Day 3", mood: "\u{1F634}", summary: "Recovery jog + podcast. Fighting urge to run faster." },
+      { day: "Day 5", mood: "\u{1F4AA}", summary: "Tempo run: 8km at marathon pace. Hit every split perfectly." },
+      { day: "Day 7", mood: "\u{1F630}", summary: "Rest day. Can\u2019t stop thinking about tomorrow\u2019s 24km long run." },
+      { day: "Day 9", mood: "\u{1F623}", summary: "Shin splints on Tuesday. Cut run short at 3km. Booked physio.", flagged: true },
+      { day: "Day 11", mood: "\u{1F3CA}", summary: "Pool running 40 min. Shins feeling better already." },
+      { day: "Day 14", mood: "\u{1F525}", summary: "26km long run with last 6km at marathon pace. BREAKTHROUGH!" },
+    ];
+
+    const PROVIDER_RESULTS = {
+      "OpenAI GPT-4o":      { start: true, middle: false, end: true, icon: "\u{1F7E2}" },
+      "Claude 3 Haiku":     { start: true, middle: true,  end: true, icon: "\u{1F7E0}" },
+      "Gemini Flash":       { start: true, middle: false, end: true, icon: "\u{1F535}" },
+      "DeepSeek":           { start: true, middle: false, end: true, icon: "\u{1F7E3}" },
+      "Llama 3.2 (Local)":  { start: true, middle: false, end: false, icon: "\u26AB" },
+    };
+
+    /* ── Shared Components ────────────────────────── */
+
+    function ProgressDots({ current, total }) {
+      return (
+        <div style={{ display: "flex", gap: 6, justifyContent: "center", padding: "12px 0" }}>
+          {Array.from({ length: total }).map((_, i) => (
+            <div key={i} style={{
+              width: i === current ? 24 : 8, height: 8, borderRadius: 4,
+              background: i === current ? "#f97316" : i < current ? "#fdba74" : "rgba(255,255,255,0.2)",
+              transition: "all 0.3s ease",
+            }} />
+          ))}
+        </div>
+      );
+    }
+
+    function FadeIn({ children, delay = 0 }) {
+      const [visible, setVisible] = useState(false);
+      useEffect(() => {
+        const t = setTimeout(() => setVisible(true), delay);
+        return () => clearTimeout(t);
+      }, [delay]);
+      return (
+        <div style={{
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(16px)",
+          transition: "all 0.5s ease",
+        }}>
+          {children}
+        </div>
+      );
+    }
+
+    /* ── Step Components ──────────────────────────── */
+
+    function WelcomeStep() {
+      return (
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <FadeIn>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>{"\u{1F9EA}"}</div>
+            <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "2rem", fontWeight: 800, color: "#fff", marginBottom: 8, lineHeight: 1.2 }}>
+              Context Engineering Lab
+            </h1>
+            <p style={{ color: "#fdba74", fontSize: "1.1rem", fontWeight: 500, marginBottom: 24 }}>
+              Can You Trust Your AI Coach?
+            </p>
+          </FadeIn>
+          <FadeIn delay={300}>
+            <div style={{
+              background: "rgba(255,255,255,0.06)", borderRadius: 16, padding: 20,
+              margin: "0 auto", maxWidth: 360, border: "1px solid rgba(255,255,255,0.1)",
+            }}>
+              <p style={{ color: "#e2e8f0", fontSize: "0.95rem", lineHeight: 1.7, margin: 0 }}>
+                You're about to see what happens when AI reads an athlete's training journal.
+                <br /><br />
+                <strong style={{ color: "#f97316" }}>Your job:</strong> Predict what the AI will get right — and what it'll miss.
+              </p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={600}>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem", marginTop: 24 }}>
+              Built by Ben Marino &middot; MindSetCoach Research
+            </p>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    function PersonaIntroStep() {
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 36, marginBottom: 4 }}>{"\u{1F3AD}"}</div>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.5rem", color: "#fff", margin: 0 }}>
+                Experiment 1: The Persona War
+              </h2>
+              <p style={{ color: "#fdba74", fontSize: "0.9rem", marginTop: 8 }}>Same data. Two very different coaches.</p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={200}>
+            <p style={{ color: "#cbd5e1", fontSize: "0.9rem", lineHeight: 1.7, marginBottom: 16 }}>
+              Here's a real athlete's training journal — 7 entries from a marathon training block. Read through them:
+            </p>
+          </FadeIn>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {JOURNAL_PREVIEW.map((entry, i) => (
+              <FadeIn key={i} delay={300 + i * 80}>
+                <div style={{
+                  background: entry.flagged ? "linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05))" : "rgba(255,255,255,0.04)",
+                  border: entry.flagged ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12, padding: "12px 14px", display: "flex", gap: 12, alignItems: "flex-start",
+                }}>
+                  <div style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>{entry.mood}</div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: entry.flagged ? "#fca5a5" : "#e2e8f0", fontSize: "0.82rem" }}>
+                      {entry.day} {entry.flagged && <span style={{ color: "#ef4444", marginLeft: 6 }}>{"\u26A0\uFE0F"} FLAGGED</span>}
+                    </div>
+                    <div style={{ color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.5 }}>{entry.summary}</div>
+                  </div>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function PersonaPredictStep({ personaVote, setPersonaVote }) {
+      const options = [
+        { id: "same", label: "\u{1F91D} Both will mention it similarly" },
+        { id: "goggins_harsh", label: "\u{1F525} Goggins will downplay it, Lasso will be concerned" },
+        { id: "different_frame", label: "\u{1F3AD} Both mention it but frame it completely differently" },
+        { id: "one_miss", label: "\u{1FAE3} One of them might miss it entirely" },
+      ];
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.4rem", color: "#fff", margin: 0 }}>Make Your Prediction</h2>
+              <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: 8 }}>Two AI coaches read the same 7 journal entries. How will they differ?</p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={200}>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 20, marginBottom: 20 }}>
+              <p style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: 600, marginBottom: 12 }}>
+                The shin splints injury (Day 9) — what will each coach do with it?
+              </p>
+              {options.map((opt) => (
+                <button key={opt.id} onClick={() => setPersonaVote(opt.id)} style={{
+                  display: "block", width: "100%", padding: "14px 16px", marginBottom: 8, borderRadius: 12,
+                  border: personaVote === opt.id ? "2px solid #f97316" : "1px solid rgba(255,255,255,0.12)",
+                  background: personaVote === opt.id ? "rgba(249,115,22,0.12)" : "rgba(255,255,255,0.03)",
+                  color: personaVote === opt.id ? "#fdba74" : "#cbd5e1", textAlign: "left", fontSize: "0.88rem", transition: "all 0.2s",
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          </FadeIn>
+          {personaVote && (
+            <FadeIn>
+              <div style={{ textAlign: "center", color: "#22c55e", fontSize: "0.9rem", fontWeight: 600 }}>
+                {"\u2713"} Vote locked in! Wait for the reveal...
+              </div>
+            </FadeIn>
+          )}
+        </div>
+      );
+    }
+
+    function PersonaRevealStep({ personaVote }) {
+      const [showLasso, setShowLasso] = useState(false);
+      const [showInsight, setShowInsight] = useState(false);
+      useEffect(() => {
+        const t1 = setTimeout(() => setShowLasso(true), 800);
+        const t2 = setTimeout(() => setShowInsight(true), 1600);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+      }, []);
+      const correct = personaVote === "different_frame";
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.4rem", color: "#fff", margin: 0 }}>The Reveal</h2>
+              {correct
+                ? <p style={{ color: "#22c55e", fontSize: "0.9rem", marginTop: 8, fontWeight: 600 }}>{"\u{1F3AF}"} You nailed it! They frame it completely differently.</p>
+                : <p style={{ color: "#f97316", fontSize: "0.9rem", marginTop: 8 }}>The answer: both mention the injury — but the framing is night and day.</p>
+              }
+            </div>
+          </FadeIn>
+          <FadeIn delay={200}>
+            <div style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 16, padding: 16, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 24 }}>{"\u{1F525}"}</span>
+                <span style={{ fontWeight: 800, color: "#ff6b6b", fontSize: "0.95rem" }}>Goggins Mode</span>
+              </div>
+              <p style={{ color: "#e2e8f0", fontSize: "0.82rem", lineHeight: 1.7, margin: 0, fontStyle: "italic" }}>
+                "Day 9 you folded — shin splints and suddenly you're <span style={{ background: "rgba(239,68,68,0.3)", padding: "1px 4px", borderRadius: 3 }}>catastrophizing</span>. That's weak. The physio said it was MILD. You lost 4 days because your <span style={{ background: "rgba(239,68,68,0.3)", padding: "1px 4px", borderRadius: 3 }}>mind quit before your body</span> did."
+              </p>
+            </div>
+          </FadeIn>
+          {showLasso && (
+            <FadeIn>
+              <div style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)", border: "1px solid rgba(146,64,14,0.3)", borderRadius: 16, padding: 16, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 24 }}>{"\u{1F49B}"}</span>
+                  <span style={{ fontWeight: 800, color: "#78350f", fontSize: "0.95rem" }}>Ted Lasso Mode</span>
+                </div>
+                <p style={{ color: "#78350f", fontSize: "0.82rem", lineHeight: 1.7, margin: 0, fontStyle: "italic" }}>
+                  "The way you handled that shin splints scare? That's not a setback, that's <span style={{ background: "rgba(120,53,15,0.15)", padding: "1px 4px", borderRadius: 3 }}>CHARACTER</span>. You listened to your body, got help right away... Most folks would've pushed through and made it worse."
+                </p>
+              </div>
+            </FadeIn>
+          )}
+          {showInsight && (
+            <FadeIn>
+              <div style={{ background: "rgba(99,102,241,0.1)", borderLeft: "4px solid #6366f1", borderRadius: "0 12px 12px 0", padding: 16, marginTop: 16 }}>
+                <p style={{ color: "#c7d2fe", fontSize: "0.85rem", lineHeight: 1.7, margin: 0, fontWeight: 500 }}>
+                  <strong style={{ color: "#a5b4fc" }}>{"\u{1F4A1}"} Key Insight:</strong> Same facts. Same injury. But Goggins calls it "weakness" while Lasso calls it "character."
+                  <strong style={{ color: "#f97316" }}> Neither is wrong — but the coaching impact on your athlete is dramatically different.</strong>
+                </p>
+              </div>
+            </FadeIn>
+          )}
+        </div>
+      );
+    }
+
+    function DumbZoneIntroStep() {
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 36, marginBottom: 4 }}>{"\u{1F3AF}"}</div>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.5rem", color: "#fff", margin: 0 }}>Experiment 2: The "Dumb Zone"</h2>
+              <p style={{ color: "#fdba74", fontSize: "0.9rem", marginTop: 8 }}>Where does AI stop paying attention?</p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={200}>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 20 }}>
+              <p style={{ color: "#e2e8f0", fontSize: "0.9rem", lineHeight: 1.8, marginBottom: 0 }}>
+                We gave an AI <strong style={{ color: "#f97316" }}>7 journal entries</strong> and hid a critical fact inside:
+              </p>
+              <div style={{
+                background: "linear-gradient(90deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05))",
+                border: "2px solid rgba(245,158,11,0.4)", borderRadius: 12, padding: 16, textAlign: "center", margin: "16px 0",
+              }}>
+                <code style={{ color: "#fbbf24", fontSize: "1.1rem", fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>
+                  "Shin splints on Tuesday"
+                </code>
+              </div>
+              <p style={{ color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.7 }}>
+                We placed this fact at the <strong style={{ color: "#22c55e" }}>start</strong> (Entry #1), the <strong style={{ color: "#ef4444" }}>middle</strong> (Entry #4), and the <strong style={{ color: "#22c55e" }}>end</strong> (Entry #7) — then asked the AI to recall it each time.
+              </p>
+            </div>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    function DumbZonePredictStep({ positionVote, setPositionVote }) {
+      const options = [
+        { id: "start", label: "\u{1F4CD} Start — AI will miss facts at the beginning" },
+        { id: "middle", label: "\u{1F4CD} Middle — AI will miss facts in the middle" },
+        { id: "end", label: "\u{1F4CD} End — AI will miss facts at the end" },
+        { id: "none", label: "\u{1F916} AI will find it everywhere — no blind spots" },
+      ];
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.4rem", color: "#fff", margin: 0 }}>Where will the AI fail?</h2>
+              <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: 8 }}>When the fact is hidden at each position, where will the AI miss it?</p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={200}>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 20 }}>
+              {options.map((opt) => (
+                <button key={opt.id} onClick={() => setPositionVote(opt.id)} style={{
+                  display: "block", width: "100%", padding: "14px 16px", marginBottom: 8, borderRadius: 12,
+                  border: positionVote === opt.id ? "2px solid #f97316" : "1px solid rgba(255,255,255,0.12)",
+                  background: positionVote === opt.id ? "rgba(249,115,22,0.12)" : "rgba(255,255,255,0.03)",
+                  color: positionVote === opt.id ? "#fdba74" : "#cbd5e1", textAlign: "left", fontSize: "0.88rem", transition: "all 0.2s",
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          </FadeIn>
+          {positionVote && (
+            <FadeIn>
+              <div style={{ textAlign: "center", color: "#22c55e", fontSize: "0.9rem", fontWeight: 600, marginTop: 16 }}>
+                {"\u2713"} Locked in! Let's see the results...
+              </div>
+            </FadeIn>
+          )}
+        </div>
+      );
+    }
+
+    function DumbZoneRevealStep({ positionVote }) {
+      const [revealStage, setRevealStage] = useState(0);
+      useEffect(() => {
+        const t1 = setTimeout(() => setRevealStage(1), 400);
+        const t2 = setTimeout(() => setRevealStage(2), 800);
+        const t3 = setTimeout(() => setRevealStage(3), 1200);
+        return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+      }, []);
+      const positions = [
+        { label: "START", result: "FOUND", color: "#22c55e", bg: "rgba(34,197,94,0.15)", icon: "\u2705", pct: "95%" },
+        { label: "MIDDLE", result: "MISSED", color: "#ef4444", bg: "rgba(239,68,68,0.15)", icon: "\u274C", pct: "40%" },
+        { label: "END", result: "FOUND", color: "#22c55e", bg: "rgba(34,197,94,0.15)", icon: "\u2705", pct: "90%" },
+      ];
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.4rem", color: "#fff", margin: 0 }}>The U-Curve of Attention</h2>
+              {positionVote === "middle"
+                ? <p style={{ color: "#22c55e", fontSize: "0.9rem", marginTop: 8, fontWeight: 600 }}>{"\u{1F3AF}"} You got it! The middle is the blind spot.</p>
+                : <p style={{ color: "#f97316", fontSize: "0.9rem", marginTop: 8 }}>Surprise — the AI's attention drops in the <strong>middle</strong>.</p>
+              }
+            </div>
+          </FadeIn>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "flex-end" }}>
+            {positions.map((pos, i) => (
+              <div key={i} style={{
+                flex: 1, opacity: revealStage > i ? 1 : 0.2,
+                transform: revealStage > i ? "scale(1)" : "scale(0.95)", transition: "all 0.5s ease",
+              }}>
+                <div style={{
+                  background: pos.bg, border: `2px solid ${pos.color}`, borderRadius: 16, padding: 16,
+                  textAlign: "center", minHeight: i === 1 ? 100 : 130,
+                  display: "flex", flexDirection: "column", justifyContent: "center", marginTop: i === 1 ? 30 : 0,
+                }}>
+                  <div style={{ fontSize: 28, marginBottom: 4 }}>{pos.icon}</div>
+                  <div style={{ color: pos.color, fontWeight: 800, fontSize: "0.8rem" }}>{pos.label}</div>
+                  <div style={{ color: pos.color, fontSize: "0.75rem", opacity: 0.8 }}>{pos.pct} recall</div>
+                </div>
+                <div style={{ textAlign: "center", color: i === 1 ? "#ef4444" : "#22c55e", fontSize: "0.7rem", fontWeight: 700, marginTop: 6 }}>
+                  {i === 1 ? "\u26A0\uFE0F BLIND SPOT" : "HIGH ATTENTION"}
+                </div>
+              </div>
+            ))}
+          </div>
+          <FadeIn delay={1400}>
+            <svg width="100%" viewBox="0 0 300 50" style={{ display: "block", margin: "0 auto 16px" }}>
+              <path d="M 30 10 Q 150 45 270 10" stroke="#6366f1" strokeWidth="2.5" fill="none" strokeDasharray="6,4" />
+              <text x="150" y="48" textAnchor="middle" fill="#818cf8" fontSize="10" fontWeight="bold" fontFamily="DM Sans, sans-serif">U-Curve of AI Attention</text>
+            </svg>
+          </FadeIn>
+          <FadeIn delay={1600}>
+            <div style={{ background: "rgba(239,68,68,0.08)", borderLeft: "4px solid #ef4444", borderRadius: "0 12px 12px 0", padding: 16 }}>
+              <p style={{ color: "#fca5a5", fontSize: "0.85rem", lineHeight: 1.7, margin: 0 }}>
+                <strong style={{ color: "#f87171" }}>{"\u26A0\uFE0F"} For coaches:</strong> If your athlete's injury report lands in the middle of their journal history, the AI might literally <strong>not see it</strong>. This isn't a bug — it's how attention mechanisms work in current language models.
+              </p>
+            </div>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    function ProvidersIntroStep() {
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 36, marginBottom: 4 }}>{"\u2694\uFE0F"}</div>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.5rem", color: "#fff", margin: 0 }}>Not All AIs Are Equal</h2>
+              <p style={{ color: "#fdba74", fontSize: "0.9rem", marginTop: 8 }}>We ran the same test across 5 different AI providers.</p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={200}>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 20 }}>
+              <p style={{ color: "#e2e8f0", fontSize: "0.9rem", lineHeight: 1.8, marginBottom: 16 }}>
+                Same journal entries. Same hidden fact. Same positions. Five different AI models:
+              </p>
+              {Object.entries(PROVIDER_RESULTS).map(([name, data], i) => (
+                <FadeIn key={name} delay={300 + i * 100}>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+                    background: "rgba(255,255,255,0.03)", borderRadius: 10, marginBottom: 6, border: "1px solid rgba(255,255,255,0.06)",
+                  }}>
+                    <span style={{ fontSize: 18 }}>{data.icon}</span>
+                    <span style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: 600 }}>{name}</span>
+                  </div>
+                </FadeIn>
+              ))}
+              <p style={{ color: "#94a3b8", fontSize: "0.82rem", marginTop: 16 }}>Question: Will they all have the same blind spots?</p>
+            </div>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    function ProvidersRevealStep() {
+      const [revealed, setRevealed] = useState(0);
+      const providers = Object.entries(PROVIDER_RESULTS);
+      useEffect(() => {
+        const interval = setInterval(() => {
+          setRevealed((prev) => { if (prev >= providers.length) { clearInterval(interval); return prev; } return prev + 1; });
+        }, 600);
+        return () => clearInterval(interval);
+      }, []);
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.3rem", color: "#fff", margin: 0 }}>Provider Comparison Results</h2>
+            </div>
+          </FadeIn>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 60px", gap: 2, marginBottom: 2, background: "rgba(255,255,255,0.05)", borderRadius: "12px 12px 0 0", overflow: "hidden" }}>
+            <div style={{ padding: "10px 12px", fontWeight: 700, color: "#94a3b8", fontSize: "0.75rem" }}>PROVIDER</div>
+            {["START", "MID", "END"].map(h => <div key={h} style={{ padding: "10px 4px", fontWeight: 700, color: "#94a3b8", fontSize: "0.7rem", textAlign: "center" }}>{h}</div>)}
+          </div>
+          {providers.map(([name, data], i) => (
+            <div key={name} style={{
+              display: "grid", gridTemplateColumns: "1fr 60px 60px 60px", gap: 2,
+              opacity: revealed > i ? 1 : 0.15, transition: "all 0.4s ease",
+              background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.05)",
+            }}>
+              <div style={{ padding: "12px", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14 }}>{data.icon}</span>
+                <span style={{ color: "#e2e8f0", fontSize: "0.8rem", fontWeight: 600 }}>{name.split(" ")[0]}</span>
+              </div>
+              {["start", "middle", "end"].map((pos) => (
+                <div key={pos} style={{
+                  padding: "12px 4px", textAlign: "center", fontSize: 20,
+                  background: revealed > i ? (data[pos] ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)") : "transparent",
+                }}>
+                  {revealed > i ? (data[pos] ? "\u2705" : "\u274C") : "\u00B7"}
+                </div>
+              ))}
+            </div>
+          ))}
+          <FadeIn delay={providers.length * 600 + 400}>
+            <div style={{ background: "rgba(99,102,241,0.1)", borderLeft: "4px solid #6366f1", borderRadius: "0 12px 12px 0", padding: 16, marginTop: 20 }}>
+              <p style={{ color: "#c7d2fe", fontSize: "0.85rem", lineHeight: 1.7, margin: 0 }}>
+                <strong style={{ color: "#a5b4fc" }}>{"\u{1F4A1}"} Key Insight:</strong> Most providers lose the middle — but not all. Claude found it everywhere, while the local model missed even the end.
+                <strong style={{ color: "#f97316" }}> The AI you choose is a decision that affects athlete safety.</strong>
+              </p>
+            </div>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    function CompressionIntroStep() {
+      const strategies = [
+        { label: "Full Context", desc: "All 21 journal entries, full text", tokens: "~4,200", color: "#22c55e" },
+        { label: "Compressed", desc: "AI-summarized entries", tokens: "~1,800", color: "#eab308" },
+        { label: "Limited (3 recent)", desc: "Only last 3 entries", tokens: "~600", color: "#ef4444" },
+      ];
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 36, marginBottom: 4 }}>{"\u{1F4B0}"}</div>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.5rem", color: "#fff", margin: 0 }}>The Cost vs Quality Trade-off</h2>
+              <p style={{ color: "#fdba74", fontSize: "0.9rem", marginTop: 8 }}>Can we make it cheaper without making it worse?</p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={200}>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: 20 }}>
+              <p style={{ color: "#e2e8f0", fontSize: "0.9rem", lineHeight: 1.8 }}>Every word you send to the AI costs money (tokens). Three strategies:</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
+                {strategies.map((s, i) => (
+                  <FadeIn key={i} delay={400 + i * 150}>
+                    <div style={{
+                      background: `${s.color}11`, border: `1px solid ${s.color}33`, borderRadius: 12, padding: 14,
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                    }}>
+                      <div>
+                        <div style={{ color: s.color, fontWeight: 700, fontSize: "0.9rem" }}>{s.label}</div>
+                        <div style={{ color: "#94a3b8", fontSize: "0.78rem" }}>{s.desc}</div>
+                      </div>
+                      <div style={{ color: s.color, fontWeight: 700, fontSize: "0.85rem", fontFamily: "'DM Mono', monospace" }}>{s.tokens}</div>
+                    </div>
+                  </FadeIn>
+                ))}
+              </div>
+            </div>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    function CompressionRevealStep() {
+      const [stage, setStage] = useState(0);
+      useEffect(() => {
+        const t1 = setTimeout(() => setStage(1), 500);
+        const t2 = setTimeout(() => setStage(2), 1200);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+      }, []);
+      const items = [
+        { label: "Full Context", color: "#22c55e", width: "100%", result: "Mentioned shin splints, training progression, mental barriers, recovery strategy, breakthrough run", verdict: "\u2705 Complete picture" },
+        { label: "Compressed", color: "#eab308", width: "43%", result: "Mentioned shin splints and breakthrough. Lost details about mental barriers and visualization techniques", verdict: "\u26A0\uFE0F Key nuance lost" },
+        { label: "Limited (3 recent)", color: "#ef4444", width: "14%", result: "Only saw the last 3 days. No mention of shin splints AT ALL \u2014 the injury is invisible", verdict: "\u274C Injury invisible" },
+      ];
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.4rem", color: "#fff", textAlign: "center", margin: "0 0 16px" }}>What Gets Lost?</h2>
+          </FadeIn>
+          {items.map((item, i) => (
+            <div key={i} style={{ opacity: stage >= i ? 1 : 0.15, transition: "all 0.5s ease", marginBottom: 14 }}>
+              <div style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${item.color}44`, borderRadius: 14, padding: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ color: item.color, fontWeight: 700, fontSize: "0.9rem" }}>{item.label}</span>
+                  <span style={{ color: item.color, fontSize: "0.8rem", fontWeight: 700 }}>{item.verdict}</span>
+                </div>
+                <div style={{ height: 8, background: "rgba(255,255,255,0.08)", borderRadius: 4, marginBottom: 10, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: stage >= i ? item.width : "0%", background: item.color, borderRadius: 4, transition: "width 0.8s ease" }} />
+                </div>
+                <p style={{ color: "#94a3b8", fontSize: "0.8rem", lineHeight: 1.6, margin: 0 }}>{item.result}</p>
+              </div>
+            </div>
+          ))}
+          <FadeIn delay={2000}>
+            <div style={{ background: "rgba(239,68,68,0.08)", borderLeft: "4px solid #ef4444", borderRadius: "0 12px 12px 0", padding: 16, marginTop: 8 }}>
+              <p style={{ color: "#fca5a5", fontSize: "0.85rem", lineHeight: 1.7, margin: 0 }}>
+                <strong style={{ color: "#f87171" }}>{"\u{1F4A1}"} The punchline:</strong> The cheapest option saved 86% on cost but made the AI <strong style={{ color: "#ef4444" }}>completely blind to an injury</strong>. For coaching, cheaper isn't always better.
+              </p>
+            </div>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    function TakeawaysStep() {
+      const rules = [
+        { icon: "\u{1F4CD}", title: "Position matters", desc: "Put critical info at the start or end \u2014 never bury it in the middle." },
+        { icon: "\u{1F3AD}", title: "Persona shapes truth", desc: "The AI\u2019s character changes what it emphasizes. Choose deliberately." },
+        { icon: "\u{1F50D}", title: "Verify, don\u2019t trust", desc: "AI sounds confident even when it missed half the data. Always check." },
+      ];
+      return (
+        <div style={{ padding: "12px 0" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>{"\u{1F9E0}"}</div>
+              <h2 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "1.5rem", color: "#fff", margin: 0 }}>Three Rules for AI-Assisted Coaching</h2>
+            </div>
+          </FadeIn>
+          {rules.map((rule, i) => (
+            <FadeIn key={i} delay={300 + i * 300}>
+              <div style={{
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16,
+                padding: 18, marginBottom: 12, display: "flex", gap: 14, alignItems: "flex-start",
+              }}>
+                <div style={{ fontSize: 28, flexShrink: 0 }}>{rule.icon}</div>
+                <div>
+                  <div style={{ color: "#f97316", fontWeight: 700, fontSize: "1rem", marginBottom: 4 }}>{rule.title}</div>
+                  <div style={{ color: "#cbd5e1", fontSize: "0.88rem", lineHeight: 1.6 }}>{rule.desc}</div>
+                </div>
+              </div>
+            </FadeIn>
+          ))}
+          <FadeIn delay={1500}>
+            <div style={{
+              background: "linear-gradient(135deg, rgba(249,115,22,0.12), rgba(249,115,22,0.04))",
+              border: "2px solid rgba(249,115,22,0.3)", borderRadius: 20, padding: 24, textAlign: "center", marginTop: 24,
+            }}>
+              <p style={{ color: "#fdba74", fontSize: "1rem", fontWeight: 600, margin: "0 0 8px" }}>
+                Context Engineering isn't just a developer skill.
+              </p>
+              <p style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: 800, margin: 0, fontFamily: "'Playfair Display', Georgia, serif" }}>
+                It's how you make AI work <em>for</em> your athletes,<br />not just <em>about</em> them.
+              </p>
+            </div>
+          </FadeIn>
+          <FadeIn delay={2000}>
+            <div style={{ textAlign: "center", marginTop: 24 }}>
+              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
+                Ben Marino &middot; MindSetCoach &middot; benmarino.dev
+              </p>
+            </div>
+          </FadeIn>
+        </div>
+      );
+    }
+
+    /* ── Main App ─────────────────────────────────── */
+
+    function ContextLabWorkshop() {
+      const [step, setStep] = useState(0);
+      const [personaVote, setPersonaVote] = useState(null);
+      const [positionVote, setPositionVote] = useState(null);
+      const containerRef = useRef(null);
+
+      const currentStepId = STEPS[step];
+      const canGoBack = step > 0;
+      const canGoForward = step < STEPS.length - 1;
+
+      useEffect(() => {
+        if (containerRef.current) containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      }, [step]);
+
+      // Swipe support
+      const touchStart = useRef(null);
+      const handleTouchStart = (e) => { touchStart.current = e.touches[0].clientX; };
+      const handleTouchEnd = (e) => {
+        if (touchStart.current === null) return;
+        const diff = touchStart.current - e.changedTouches[0].clientX;
+        if (diff > 60 && canGoForward) setStep(s => s + 1);
+        if (diff < -60 && canGoBack) setStep(s => s - 1);
+        touchStart.current = null;
+      };
+
+      const renderStep = () => {
+        switch (currentStepId) {
+          case "welcome": return <WelcomeStep />;
+          case "persona_intro": return <PersonaIntroStep />;
+          case "persona_predict": return <PersonaPredictStep personaVote={personaVote} setPersonaVote={setPersonaVote} />;
+          case "persona_reveal": return <PersonaRevealStep personaVote={personaVote} />;
+          case "dumbzone_intro": return <DumbZoneIntroStep />;
+          case "dumbzone_predict": return <DumbZonePredictStep positionVote={positionVote} setPositionVote={setPositionVote} />;
+          case "dumbzone_reveal": return <DumbZoneRevealStep positionVote={positionVote} />;
+          case "providers_intro": return <ProvidersIntroStep />;
+          case "providers_reveal": return <ProvidersRevealStep />;
+          case "compression_intro": return <CompressionIntroStep />;
+          case "compression_reveal": return <CompressionRevealStep />;
+          case "takeaways": return <TakeawaysStep />;
+          default: return null;
+        }
+      };
+
+      return (
+        <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}
+          onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+          {/* Top bar */}
+          <div style={{
+            padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+            display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0,
+          }}>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.5px" }}>
+              {"\u{1F9EA}"} CONTEXT LAB
+            </span>
+            <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.75rem" }}>
+              {step + 1} / {STEPS.length}
+            </span>
+          </div>
+
+          <ProgressDots current={step} total={STEPS.length} />
+
+          {/* Content */}
+          <div ref={containerRef} style={{
+            flex: 1, overflowY: "auto", padding: "0 20px 100px",
+            maxWidth: 480, margin: "0 auto", width: "100%",
+          }}>
+            {renderStep()}
+          </div>
+
+          {/* Navigation */}
+          <div style={{
+            position: "fixed", bottom: 0, left: 0, right: 0,
+            padding: "12px 20px", paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            background: "linear-gradient(to top, #0c0a1a 60%, transparent)",
+            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+          }}>
+            <button onClick={() => canGoBack && setStep(step - 1)} disabled={!canGoBack} style={{
+              padding: "12px 24px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.15)",
+              background: "rgba(255,255,255,0.05)", color: canGoBack ? "#e2e8f0" : "rgba(255,255,255,0.2)",
+              fontSize: "0.9rem", fontWeight: 600,
+            }}>{"\u2190"} Back</button>
+            <button onClick={() => canGoForward && setStep(step + 1)} disabled={!canGoForward} style={{
+              padding: "12px 32px", borderRadius: 12,
+              background: canGoForward ? "linear-gradient(135deg, #f97316, #ea580c)" : "rgba(255,255,255,0.1)",
+              color: canGoForward ? "white" : "rgba(255,255,255,0.3)",
+              fontSize: "0.9rem", fontWeight: 700,
+              boxShadow: canGoForward ? "0 4px 20px rgba(249,115,22,0.3)" : "none",
+            }}>{step === STEPS.length - 1 ? "\u2728 Done" : "Next \u2192"}</button>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<ContextLabWorkshop />);
+  </script>
+</body>
+</html>
