@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Context Engineering Lab: Stress-testing AI Coaching Reliability — Ben Marino</title>
+<meta name="description" content="Talk by Ben Marino at AI & Society Brisbane. Experiments on persona bias, attention blind spots, provider comparisons, and context-compression trade-offs across Claude, OpenAI, DeepSeek, and Gemini.">
+<meta property="og:title" content="Context Engineering Lab: Stress-testing AI Coaching Reliability">
+<meta property="og:description" content="AI & Society Brisbane · The Precinct, Fortitude Valley">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-elevated: #111820;
+    --bg-card: #151c27;
+    --bg-card-hover: #1a2332;
+    --border: #1e2a3a;
+    --border-hover: #2a3a4e;
+    --text: #f1f5f9;
+    --text-muted: #c4d0dc;
+    --text-dim: #8d9bab;
+    --accent: #14b8a6;
+    --accent-glow: #2dd4bf;
+    --accent-dim: #0d9488;
+    --blue: #3b82f6;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--bg);
+    color-scheme: dark;
+    background: #0a0e14;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: #0a0e14 !important;
+    background-color: #0a0e14 !important;
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .glow {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    top: -200px;
+    right: -200px;
+  }
+
+  .glow-2 {
+    top: auto;
+    right: auto;
+    bottom: 20%;
+    left: -300px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ---- BACK LINK ---- */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 40px 0 0;
+    transition: color 0.3s;
+  }
+
+  .back-link:hover { color: var(--accent); }
+
+  .back-link::before { content: '←'; }
+
+  /* ---- HEADER ---- */
+  header {
+    padding: 32px 0 60px;
+  }
+
+  .header-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(28px, 5vw, 46px);
+    font-weight: 400;
+    line-height: 1.2;
+    color: #ffffff;
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.1s forwards;
+  }
+
+  .talk-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.2s forwards;
+  }
+
+  .talk-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .talk-meta-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .talk-meta-value {
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  /* ---- DIVIDER ---- */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 20px 0 50px;
+  }
+
+  /* ---- SECTIONS ---- */
+  section {
+    margin-bottom: 60px;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+  }
+
+  .abstract {
+    font-size: 16px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    border-left: 3px solid var(--accent);
+    padding-left: 20px;
+  }
+
+  /* ---- PDF EMBED ---- */
+  .pdf-container {
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    overflow: hidden;
+  }
+
+  .pdf-embed {
+    width: 100%;
+    height: 600px;
+    border: none;
+    display: block;
+  }
+
+  .pdf-fallback {
+    padding: 40px;
+    text-align: center;
+  }
+
+  .pdf-fallback p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+
+  .download-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-decoration: none;
+    background: var(--accent);
+    color: #0F1419;
+    padding: 10px 24px;
+    font-weight: 700;
+    transition: background 0.3s;
+  }
+
+  .download-link:hover { background: var(--accent-glow); }
+
+  /* ---- RECORDING ---- */
+  .recording-placeholder {
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .recording-icon {
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-dim);
+    font-size: 20px;
+  }
+
+  .recording-text h3 {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .recording-text p {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  /* ---- FOOTER ---- */
+  footer {
+    padding: 40px 0 60px;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+
+  .footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-content p {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 20px;
+  }
+
+  .footer-links a {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .footer-links a:hover { color: var(--accent); }
+
+  /* ---- ANIMATIONS ---- */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 640px) {
+    header { padding: 24px 0 40px; }
+    .talk-meta { gap: 16px; }
+    .pdf-embed { height: 400px; }
+    .recording-placeholder { flex-direction: column; }
+    .footer-content { flex-direction: column; text-align: center; }
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f8fafc;
+      --bg-elevated: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f8fafc;
+      --border: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+    }
+    html, body { background: #f8fafc !important; }
+    h1 { color: #0f172a !important; }
+    .glow { background: radial-gradient(circle, rgba(20, 184, 166, 0.08) 0%, transparent 70%); }
+    .glow-2 { background: radial-gradient(circle, rgba(59, 130, 246, 0.06) 0%, transparent 70%); }
+    .pdf-container { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .recording-placeholder { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow"></div>
+<div class="glow glow-2"></div>
+
+<div class="container">
+
+  <a href="/" class="back-link">Back to home</a>
+
+  <header>
+    <div class="header-label">Talk</div>
+    <h1>Context Engineering Lab: Stress-testing AI Coaching Reliability</h1>
+    <div class="talk-meta">
+      <div class="talk-meta-item">
+        <span class="talk-meta-label">Event</span>
+        <span class="talk-meta-value">AI &amp; Society Brisbane</span>
+      </div>
+      <div class="talk-meta-item">
+        <span class="talk-meta-label">Venue</span>
+        <span class="talk-meta-value">The Precinct, Fortitude Valley</span>
+      </div>
+      <div class="talk-meta-item">
+        <span class="talk-meta-label">Date</span>
+        <span class="talk-meta-value">March 2026</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="divider"></div>
+
+  <section class="reveal">
+    <div class="section-label">Abstract</div>
+    <p class="abstract">
+      What happens when you push AI coaching systems past their comfortable middle ground? This talk documents a series of reproducible experiments stress-testing AI reliability across persona bias, attention blind spots, and context-compression trade-offs. Running the same coaching scenarios through Claude, OpenAI, DeepSeek, and Gemini surfaces how each model diverges under pressure — and what that means for athletes who depend on these tools.
+    </p>
+  </section>
+
+  <section class="reveal">
+    <div class="section-label">Slides</div>
+    <div class="pdf-container">
+      <object
+        class="pdf-embed"
+        data="/talks/ai-society-brisbane-2025.pdf"
+        type="application/pdf"
+      >
+        <div class="pdf-fallback">
+          <p>Your browser doesn't support inline PDFs.</p>
+          <a href="/talks/ai-society-brisbane-2025.pdf" class="download-link" download>
+            Download slides
+          </a>
+        </div>
+      </object>
+    </div>
+    <p style="margin-top: 12px; font-family: var(--mono); font-size: 11px; color: var(--text-dim);">
+      <a href="/talks/ai-society-brisbane-2025.pdf" style="color: var(--accent); text-decoration: none;" download>Download PDF</a>
+    </p>
+  </section>
+
+  <section class="reveal">
+    <div class="section-label">Recording</div>
+    <div class="recording-placeholder">
+      <div class="recording-icon">▶</div>
+      <div class="recording-text">
+        <h3>Recording coming soon</h3>
+        <p>A link to the talk recording will appear here once it's available.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-content">
+      <p>Ben Marino · Brisbane, Australia</p>
+      <div class="footer-links">
+        <a href="mailto:ben@mindsetcoach.app">Email</a>
+        <a href="https://www.linkedin.com/in/bemarino" target="_blank">LinkedIn</a>
+        <a href="https://github.com/ben-marino" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
