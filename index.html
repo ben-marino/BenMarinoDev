@@ -133,6 +133,25 @@
 
   .intro strong { color: #ffffff; font-weight: 500; }
 
+  .currently {
+    font-size: 15px;
+    color: var(--text-muted);
+    max-width: 560px;
+    line-height: 1.7;
+    margin-top: 18px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.22s forwards;
+  }
+
+  .currently-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-right: 10px;
+  }
+
   /* ---- EVENT BANNER ---- */
   .event-banner {
     border: 1px solid var(--border);
@@ -544,10 +563,12 @@
       <strong>Mental health advocate</strong> who's raised $10K+ for the Mental Health Foundation. 
       Now combining all three — building AI tools for athlete mental performance.
     </p>
+    <p class="currently">
+      <span class="currently-label">Currently</span>Senior Software Engineer at LinkSoft. Architecture and API lead on a .NET 10 modernisation.
+    </p>
     <div class="event-banner">
-      <div class="event-banner-title">Speaking at AI &amp; Society Brisbane — March 18, 2026</div>
-      <div class="event-banner-subtitle">Context, Trust &amp; the Future of Judgement · The Precinct, Fortitude Valley</div>
-      <a href="https://events.humanitix.com/ai-and-society-or-march-2026" class="event-banner-cta" target="_blank">Register Free</a>
+      <div class="event-banner-title">In the build — 9 weeks to Guzzler</div>
+      <div class="event-banner-subtitle">Body and codebase, both training.</div>
     </div>
 
     <div class="header-links">
@@ -578,7 +599,7 @@
         <span class="project-tag tag-building">Beta</span>
       </div>
       <p>
-        Mental training app for runners and endurance athletes. Coaches gain visibility into the mental side of training — the invisible data that Strava and Garmin don't track. Think Strava for your mind.
+        Mental training app for runners and endurance athletes. Coaches gain visibility into the mental side of training — the invisible data that Strava and Garmin don't track. Think Strava for your mind. Built on the Socially Fed Pyramid framework from my Master's research.
       </p>
       <div class="project-tech">
         <span>.NET MAUI</span>
@@ -611,23 +632,6 @@
 
     <div class="project">
       <div class="project-header">
-        <h3>SociallyFed</h3>
-        <span class="project-tag tag-building">In Development</span>
-      </div>
-      <p>
-        Privacy-first AI platform built on the "Socially Fed Pyramid" framework from my Master's research. Multi-tenant architecture with professional services features.
-      </p>
-      <div class="project-tech">
-        <span>Vue.js</span>
-        <span>ASP.NET Core</span>
-        <span>Google Cloud</span>
-        <span>JWT</span>
-      </div>
-      <a href="https://sociallyfed.com" class="project-link">sociallyfed.com</a>
-    </div>
-
-    <div class="project">
-      <div class="project-header">
         <h3>StudySpy</h3>
         <span class="project-tag tag-live">Live</span>
       </div>
@@ -650,8 +654,8 @@
       <div class="stat-label">Years Engineering</div>
     </div>
     <div class="stat">
-      <div class="stat-number">70K</div>
-      <div class="stat-label">Monthly Searches</div>
+      <div class="stat-number">1.5M</div>
+      <div class="stat-label">Daily Visitors</div>
     </div>
     <div class="stat">
       <div class="stat-number">$10K+</div>
