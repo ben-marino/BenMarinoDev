@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two Machines, Three Tiers — Ben Marino</title>
+<meta name="description" content="The architecture behind a race-day fuel chart: frontier reasoning where it matters, local extraction where it doesn't. Two machines, three tiers, and what broke on the first pass.">
+<meta property="og:title" content="Two Machines, Three Tiers — Ben Marino">
+<meta property="og:description" content="The architecture behind a race-day fuel chart: frontier reasoning where it matters, local extraction where it doesn't. Two machines, three tiers, and what broke on the first pass.">
+<meta property="og:type" content="article">
+<meta property="og:image" content="/public/writing/assets/two-machines-three-tiers/slide-01.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-elevated: #111820;
+    --bg-card: #151c27;
+    --bg-card-hover: #1a2332;
+    --border: #1e2a3a;
+    --border-hover: #2a3a4e;
+    --text: #f1f5f9;
+    --text-muted: #c4d0dc;
+    --text-dim: #8d9bab;
+    --accent: #14b8a6;
+    --accent-glow: #2dd4bf;
+    --accent-dim: #0d9488;
+    --blue: #3b82f6;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--bg);
+    color-scheme: dark;
+    background: #0a0e14;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: #0a0e14 !important;
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .glow {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    top: -200px;
+    right: -200px;
+  }
+
+  .glow-2 {
+    top: auto;
+    right: auto;
+    bottom: 20%;
+    left: -300px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ---- BACK LINK ---- */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 40px 0 0;
+    transition: color 0.3s;
+  }
+
+  .back-link:hover { color: var(--accent); }
+  .back-link::before { content: '←'; }
+
+  /* ---- HEADER ---- */
+  header {
+    padding: 32px 0 60px;
+  }
+
+  .header-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(28px, 5vw, 46px);
+    font-weight: 400;
+    line-height: 1.2;
+    color: #ffffff;
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.1s forwards;
+  }
+
+  .subtitle {
+    font-size: 17px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.15s forwards;
+  }
+
+  .entry-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.2s forwards;
+  }
+
+  .entry-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .entry-meta-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .entry-meta-value {
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .series-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--accent-dim);
+    border: 1px solid var(--accent-dim);
+    padding: 3px 10px;
+    margin-top: 24px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.25s forwards;
+  }
+
+  /* ---- DIVIDER ---- */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 20px 0 50px;
+  }
+
+  /* ---- SECTIONS ---- */
+  section {
+    margin-bottom: 60px;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+  }
+
+  /* ---- FRAMING PARAGRAPH ---- */
+  .framing {
+    font-size: 16px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    border-left: 3px solid var(--accent);
+    padding-left: 20px;
+  }
+
+  /* ---- SLIDES ---- */
+  .slides-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .slide-img {
+    width: 100%;
+    display: block;
+    border: 1px solid var(--border);
+  }
+
+  /* ---- LINKS SECTION ---- */
+  .entry-links {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .entry-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .entry-link-primary {
+    background: var(--accent);
+    color: #0F1419;
+    padding: 10px 24px;
+    font-weight: 700;
+    transition: background 0.3s;
+    align-self: flex-start;
+  }
+
+  .entry-link-primary:hover { background: var(--accent-glow); }
+
+  .entry-link-secondary {
+    color: var(--accent);
+    padding: 0;
+  }
+
+  .entry-link-secondary:hover { color: var(--accent-glow); }
+  .entry-link-secondary::after { content: ' →'; }
+
+  .entry-link-back {
+    color: var(--text-dim);
+    padding: 0;
+  }
+
+  .entry-link-back:hover { color: var(--accent); }
+  .entry-link-back::before { content: '← '; }
+
+  /* ---- FOOTER ---- */
+  footer {
+    padding: 40px 0 60px;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+
+  .footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-content p {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .footer-content a {
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .footer-content a:hover { color: var(--accent); }
+
+  .footer-links {
+    display: flex;
+    gap: 20px;
+  }
+
+  .footer-links a {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .footer-links a:hover { color: var(--accent); }
+
+  /* ---- REVEAL ---- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---- ANIMATIONS ---- */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 640px) {
+    header { padding: 24px 0 40px; }
+    .entry-meta { gap: 16px; }
+    .footer-content { flex-direction: column; text-align: center; }
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f8fafc;
+      --bg-elevated: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f8fafc;
+      --border: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+    }
+    html, body { background: #f8fafc !important; }
+    h1 { color: #0f172a !important; }
+    .glow { background: radial-gradient(circle, rgba(20, 184, 166, 0.08) 0%, transparent 70%); }
+    .glow-2 { background: radial-gradient(circle, rgba(59, 130, 246, 0.06) 0%, transparent 70%); }
+    .slide-img { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow"></div>
+<div class="glow glow-2"></div>
+
+<div class="container">
+
+  <a href="/writing/" class="back-link">Back to writing</a>
+
+  <header>
+    <div class="header-label">Architecture Notes</div>
+    <h1>Two Machines, Three Tiers</h1>
+    <p class="subtitle">The system behind a race-day fuel chart</p>
+    <div class="entry-meta">
+      <div class="entry-meta-item">
+        <span class="entry-meta-label">Category</span>
+        <span class="entry-meta-value">Architecture Notes</span>
+      </div>
+      <div class="entry-meta-item">
+        <span class="entry-meta-label">Date</span>
+        <span class="entry-meta-value">May 2026</span>
+      </div>
+    </div>
+    <div class="series-tag">Part of "The Long Run" — an 11-week series on building both a body and a codebase</div>
+  </header>
+
+  <div class="divider"></div>
+
+  <section class="reveal">
+    <div class="section-label">Context</div>
+    <p class="framing">
+      Three weeks ago I posted a race-day fuel chart. A few people asked how it was actually built. This is the architecture behind it: frontier reasoning where it matters, local extraction where it doesn't, filesystem handoff between them. Two machines, three tiers, and what broke on the first pass.
+    </p>
+  </section>
+
+  <section class="reveal">
+    <div class="section-label">Slides</div>
+    <div class="slides-stack">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-01.png" alt="Slide 1" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-02.png" alt="Slide 2" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-03.png" alt="Slide 3" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-04.png" alt="Slide 4" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-05.png" alt="Slide 5" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-06.png" alt="Slide 6" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/sllide-07.png" alt="Slide 7" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-08.png" alt="Slide 8" loading="lazy">
+      <img class="slide-img" src="/public/writing/assets/two-machines-three-tiers/slide-09.png" alt="Slide 9" loading="lazy">
+    </div>
+  </section>
+
+  <section class="reveal">
+    <div class="entry-links">
+      <a href="/public/writing/assets/two-machines-three-tiers.pdf" class="entry-link entry-link-primary" download>Download the deck (PDF)</a>
+      <a href="#" class="entry-link entry-link-secondary">Discussion on LinkedIn</a>
+      <a href="/writing/" class="entry-link entry-link-back">Back to writing</a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-content">
+      <p><a href="/">Ben Marino · benmarino.dev</a></p>
+      <div class="footer-links">
+        <a href="mailto:ben@mindsetcoach.app">Email</a>
+        <a href="https://www.linkedin.com/in/bemarino" target="_blank">LinkedIn</a>
+        <a href="https://github.com/ben-marino" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
