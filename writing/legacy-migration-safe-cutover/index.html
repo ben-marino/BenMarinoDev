@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The rewrite isn't the hard part. The cutover is. — Ben Marino</title>
+<meta name="description" content="Change the inside without the outside noticing. Three patterns for moving a live 15-year-old platform to new code with no maintenance window: mock the upstream, shadow mode, shim the old endpoints.">
+<meta property="og:title" content="The rewrite isn't the hard part. The cutover is. — Ben Marino">
+<meta property="og:description" content="Change the inside without the outside noticing. Three patterns for moving a live 15-year-old platform to new code with no maintenance window: mock the upstream, shadow mode, shim the old endpoints.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://benmarino.dev/writing/legacy-migration-safe-cutover/">
+<meta property="og:image" content="/public/writing/assets/legacy-migration-safe-cutover/og.png">
+<meta property="article:section" content="AI for Legacy Migration: Field Notes">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-elevated: #111820;
+    --bg-card: #151c27;
+    --bg-card-hover: #1a2332;
+    --border: #1e2a3a;
+    --border-hover: #2a3a4e;
+    --text: #f1f5f9;
+    --text-muted: #c4d0dc;
+    --text-dim: #8d9bab;
+    --accent: #14b8a6;
+    --accent-glow: #2dd4bf;
+    --accent-dim: #0d9488;
+    --accent-soft: rgba(20, 184, 166, 0.08);
+    --blue: #3b82f6;
+    --warn: #f59e0b;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--bg);
+    color-scheme: dark;
+    background: #0a0e14;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: #0a0e14 !important;
+    color: var(--text);
+    line-height: 1.7;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .glow {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    top: -200px;
+    right: -200px;
+  }
+
+  .glow-2 {
+    top: auto;
+    right: auto;
+    bottom: 20%;
+    left: -300px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ---- BACK LINK ---- */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 40px 0 0;
+    transition: color 0.3s;
+  }
+
+  .back-link:hover { color: var(--accent); }
+  .back-link::before { content: '←'; }
+
+  /* ---- HEADER ---- */
+  header {
+    padding: 32px 0 60px;
+  }
+
+  .header-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(28px, 5vw, 46px);
+    font-weight: 400;
+    line-height: 1.2;
+    color: #ffffff;
+    margin-bottom: 12px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.1s forwards;
+  }
+
+  .subtitle {
+    font-size: 17px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.15s forwards;
+  }
+
+  .entry-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.2s forwards;
+  }
+
+  .entry-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .entry-meta-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .entry-meta-value {
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .series-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--accent-dim);
+    border: 1px solid var(--accent-dim);
+    padding: 3px 10px;
+    margin-top: 24px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.25s forwards;
+  }
+
+  .series-tag strong {
+    font-weight: 500;
+    color: var(--accent);
+  }
+
+  /* ---- DIVIDER ---- */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 20px 0 50px;
+  }
+
+  /* ---- SECTIONS ---- */
+  section {
+    margin-bottom: 64px;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: clamp(22px, 3.4vw, 30px);
+    font-weight: 400;
+    line-height: 1.25;
+    color: var(--text);
+    margin-bottom: 22px;
+  }
+
+  .prose p {
+    font-size: 16px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    margin-bottom: 18px;
+  }
+
+  .prose p:last-child { margin-bottom: 0; }
+
+  .prose strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .prose a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid var(--accent-dim);
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .prose a:hover { color: var(--accent-glow); border-color: var(--accent-glow); }
+
+  .prose code {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+  }
+
+  /* ---- FRAMING PARAGRAPH ---- */
+  .framing {
+    font-size: 16px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    border-left: 3px solid var(--accent);
+    padding-left: 20px;
+  }
+
+  /* ---- PULL QUOTE ---- */
+  .pull-quote {
+    font-family: var(--serif);
+    font-size: clamp(20px, 3vw, 26px);
+    line-height: 1.4;
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding: 6px 0 6px 24px;
+    margin: 32px 0 0;
+  }
+
+  .pull-quote.closing {
+    border-left: none;
+    padding: 0;
+    text-align: center;
+    color: var(--accent-glow);
+    margin: 44px 0 0;
+  }
+
+  /* ---- SPEC BLOCK ---- */
+  .spec-block {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    margin: 0 0 28px;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .spec-block dt,
+  .spec-block dd {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .spec-block dt {
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 11px;
+    line-height: 1.9;
+    border-right: 1px solid var(--border);
+  }
+
+  .spec-block dd {
+    color: var(--text);
+  }
+
+  .spec-block dd.none { color: var(--warn); }
+  .spec-block dd.good { color: var(--accent); }
+
+  .spec-block dt:nth-last-of-type(1),
+  .spec-block dd:last-of-type { border-bottom: none; }
+
+  /* ---- STAT BLOCK ---- */
+  .stat-block {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 0 0 28px;
+  }
+
+  .stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 22px 20px 18px;
+    text-align: center;
+  }
+
+  .stat-number {
+    font-family: var(--serif);
+    font-size: clamp(30px, 5vw, 44px);
+    line-height: 1;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .stat.zero .stat-number { color: var(--accent); }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  /* ---- MOVING PARTS / STEPS ---- */
+  .parts {
+    list-style: none;
+    display: grid;
+    gap: 10px;
+    margin: 0 0 28px;
+  }
+
+  .parts li {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 16px;
+    align-items: baseline;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 14px 18px;
+  }
+
+  .parts .part-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .parts .part-desc {
+    font-size: 14.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  /* ---- COMPARISON ---- */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 0 0 28px;
+  }
+
+  .compare-col {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .compare-col.bad { border-top: 2px solid var(--warn); }
+  .compare-col.good { border-top: 2px solid var(--accent); }
+
+  .compare-head {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .compare-col.bad .compare-head { color: var(--warn); }
+  .compare-col.good .compare-head { color: var(--accent); }
+
+  .compare-big {
+    font-family: var(--serif);
+    font-size: clamp(30px, 5vw, 44px);
+    line-height: 1;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .compare-col ul {
+    list-style: none;
+    display: grid;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .compare-col li {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.55;
+    padding-left: 14px;
+    position: relative;
+  }
+
+  .compare-col li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 5px;
+    height: 1px;
+    background: var(--text-dim);
+  }
+
+  .compare-col li code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text);
+  }
+
+  .compare-foot {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+
+  /* ---- CODE CALLOUT ---- */
+  .code-callout {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 18px 20px;
+    margin: 0 0 28px;
+  }
+
+  .code-callout pre {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    overflow-x: auto;
+  }
+
+  .code-callout .tok-k { color: var(--blue); }
+  .code-callout .tok-s { color: var(--accent); }
+  .code-callout .tok-c { color: var(--text-dim); }
+
+  .code-callout .code-note {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    margin-top: 12px;
+    line-height: 1.6;
+  }
+
+  /* ---- SWITCH (THREE POSITIONS) ---- */
+  .switch {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 0 0 28px;
+  }
+
+  .switch-pos {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 20px 18px;
+    position: relative;
+  }
+
+  .switch-pos.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 32px rgba(20, 184, 166, 0.12);
+  }
+
+  .switch-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .switch-name::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .switch-pos.active .switch-name { color: var(--accent); }
+  .switch-pos.active .switch-name::before { background: var(--accent); border-color: var(--accent); }
+
+  .switch-pos ul {
+    list-style: none;
+    display: grid;
+    gap: 6px;
+  }
+
+  .switch-pos li {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .switch-pos li.off { color: var(--text-dim); text-decoration: line-through; }
+
+  /* ---- FLOW (THREE PANELS WITH ARROWS) ---- */
+  .flow {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 10px;
+    align-items: stretch;
+    margin: 0 0 28px;
+  }
+
+  .flow-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 18px 16px;
+  }
+
+  .flow-panel.shim { border-color: var(--accent-dim); background: var(--accent-soft); }
+
+  .flow-name {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  .flow-panel.shim .flow-name { color: var(--accent); }
+
+  .flow-desc {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 18px;
+  }
+
+  /* ---- PRINCIPLE LIST ---- */
+  .principles {
+    list-style: none;
+    display: grid;
+    gap: 10px;
+    margin: 0 0 28px;
+  }
+
+  .principles li {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 16px;
+    align-items: baseline;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .principles li:first-child { border-top: 1px solid var(--border); }
+
+  .principles .p-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .principles .p-desc {
+    font-size: 15px;
+    color: var(--text-muted);
+  }
+
+  /* ---- RISK / DEFENCE ---- */
+  .duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 0 0 28px;
+  }
+
+  .duo-col {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .duo-col.risk { border-top: 2px solid var(--warn); }
+  .duo-col.defence { border-top: 2px solid var(--accent); }
+
+  .duo-head {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .duo-col.risk .duo-head { color: var(--warn); }
+  .duo-col.defence .duo-head { color: var(--accent); }
+
+  .duo-col p {
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .duo-col p strong { color: var(--text); font-weight: 500; }
+
+  /* ---- SERIES NAV ---- */
+  .series-nav {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 24px;
+    margin-bottom: 32px;
+  }
+
+  .series-nav-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  .series-list {
+    list-style: none;
+    display: grid;
+    gap: 10px;
+  }
+
+  .series-list li {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 14px;
+    align-items: baseline;
+    font-size: 14.5px;
+  }
+
+  .series-list .s-part {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .series-list a {
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .series-list a:hover { color: var(--accent); border-color: var(--accent); }
+
+  .series-list .current {
+    color: var(--accent);
+  }
+
+  .series-list .current::after {
+    content: ' · you are here';
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .series-list .soon {
+    color: var(--text-dim);
+  }
+
+  .series-list .soon::after {
+    content: ' · coming soon';
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .series-pager {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .pager-link {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-decoration: none;
+    max-width: 48%;
+  }
+
+  .pager-link.next { text-align: right; margin-left: auto; }
+
+  .pager-link.disabled { opacity: 0.55; pointer-events: none; }
+
+  .pager-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .pager-title {
+    font-family: var(--serif);
+    font-size: 17px;
+    color: var(--text);
+    transition: color 0.2s;
+  }
+
+  .pager-link:hover .pager-title { color: var(--accent); }
+
+  /* ---- LINKS SECTION ---- */
+  .entry-links {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .entry-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .entry-link-back {
+    color: var(--text-dim);
+    padding: 0;
+  }
+
+  .entry-link-back:hover { color: var(--accent); }
+  .entry-link-back::before { content: '← '; }
+
+  /* ---- FOOTER ---- */
+  footer {
+    padding: 40px 0 60px;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+
+  .footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-content p {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .footer-content a {
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .footer-content a:hover { color: var(--accent); }
+
+  .footer-links {
+    display: flex;
+    gap: 20px;
+  }
+
+  .footer-links a {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .footer-links a:hover { color: var(--accent); }
+
+  /* ---- REVEAL ---- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ---- ANIMATIONS ---- */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 640px) {
+    header { padding: 24px 0 40px; }
+    .entry-meta { gap: 16px; }
+    .footer-content { flex-direction: column; text-align: center; }
+    .spec-block { grid-template-columns: 1fr; }
+    .spec-block dt { border-right: none; border-bottom: none; padding-bottom: 0; }
+    .spec-block dd { padding-top: 4px; }
+    .stat-block { grid-template-columns: 1fr; }
+    .parts li { grid-template-columns: 1fr; gap: 6px; }
+    .compare { grid-template-columns: 1fr; }
+    .switch { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: 1fr; }
+    .flow-arrow { justify-content: center; transform: rotate(90deg); }
+    .principles li { grid-template-columns: 1fr; gap: 6px; }
+    .duo { grid-template-columns: 1fr; }
+    .pager-link { max-width: 100%; }
+    .pager-link.next { text-align: left; margin-left: 0; }
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f8fafc;
+      --bg-elevated: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f8fafc;
+      --border: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+      --accent-soft: rgba(20, 184, 166, 0.06);
+      --warn: #d97706;
+    }
+    html, body { background: #f8fafc !important; }
+    h1 { color: #0f172a !important; }
+    .glow { background: radial-gradient(circle, rgba(20, 184, 166, 0.08) 0%, transparent 70%); }
+    .glow-2 { background: radial-gradient(circle, rgba(59, 130, 246, 0.06) 0%, transparent 70%); }
+    .pull-quote.closing { color: var(--accent-dim); }
+    .spec-block, .stat, .compare-col, .code-callout, .switch-pos, .flow-panel, .duo-col, .series-nav, .parts li { box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow"></div>
+<div class="glow glow-2"></div>
+
+<div class="container">
+
+  <a href="/writing/" class="back-link">Back to writing</a>
+
+  <header>
+    <div class="header-label">Field Notes · Part 2 of 3</div>
+    <h1>The rewrite isn't the hard part. The cutover is.</h1>
+    <p class="subtitle">Change the inside without the outside noticing</p>
+    <div class="entry-meta">
+      <div class="entry-meta-item">
+        <span class="entry-meta-label">Category</span>
+        <span class="entry-meta-value">Field Notes</span>
+      </div>
+      <div class="entry-meta-item">
+        <span class="entry-meta-label">Series</span>
+        <span class="entry-meta-value">Part 2 of 3</span>
+      </div>
+      <div class="entry-meta-item">
+        <span class="entry-meta-label">Topic</span>
+        <span class="entry-meta-value">Safe Cutover</span>
+      </div>
+      <div class="entry-meta-item">
+        <span class="entry-meta-label">Date</span>
+        <span class="entry-meta-value">October 2026</span>
+      </div>
+    </div>
+    <div class="series-tag"><strong>AI for Legacy Migration: Field Notes</strong> — Part 2 · Safe Cutover</div>
+  </header>
+
+  <div class="divider"></div>
+
+  <section class="reveal">
+    <div class="section-label">Context</div>
+    <p class="framing">
+      <a href="/writing/legacy-migration-verification/" style="color: var(--accent); text-decoration: none;">Part 1</a> was about knowing whether the new code is right. This part is about the question that comes after: how do you put it in front of real traffic when every real thing is still pointed at the old system, and there is no moment when you're allowed to turn it off?
+    </p>
+  </section>
+
+  <!-- 1. THE PROBLEM -->
+  <section class="reveal">
+    <div class="section-label">The Problem</div>
+    <h2>Everything real is pointed at the old system</h2>
+
+    <dl class="spec-block">
+      <dt>New code</dt><dd class="good">Written</dd>
+      <dt>Tests</dt><dd class="good">Green</dd>
+      <dt>Clients</dt><dd class="none">On the legacy system</dd>
+      <dt>Payments</dt><dd class="none">On the legacy system</dd>
+      <dt>Integrations</dt><dd class="none">On the legacy system</dd>
+      <dt>Window</dt><dd class="none">None. It's live.</dd>
+    </dl>
+
+    <div class="prose">
+      <p>The rewrite exists. The parity harness says it matches. And none of that has changed anything, because every client, every payment and every third-party integration is still talking to the fifteen-year-old app, and will keep doing so until something moves them.</p>
+      <p>The greenfield answer is "deploy it". The legacy answer has to account for the fact that the system is in use, right now, by people who did not agree to be part of a migration.</p>
+    </div>
+
+    <blockquote class="pull-quote">You don't get a maintenance window on a 15-year-old platform. You get a transition.</blockquote>
+  </section>
+
+  <!-- 2. PATTERN 1 -->
+  <section class="reveal">
+    <div class="section-label">Pattern 1</div>
+    <h2>Mock the upstream you don't control</h2>
+
+    <div class="prose">
+      <p>The new payment portal needed a backend service that didn't exist yet. It was on someone else's roadmap, on someone else's timeline. Waiting for it would have blocked the checkout flow, the card vault and the 3DS2 work, which between them were most of the portal.</p>
+      <p>So the AI built a mock of the missing service. Not a stub that returns canned data: a working stand-in with the same interface the real service will have, calling the payment gateway directly behind it. Everything above the seam is real. Only the thing below it is temporary.</p>
+    </div>
+
+    <div class="code-callout" style="margin-top: 24px;">
+<pre><span class="tok-c">// appsettings.json</span>
+<span class="tok-k">"UpstreamService"</span>: <span class="tok-s">"Mock"</span>   <span class="tok-c">// | "Real"</span></pre>
+      <div class="code-note">The seam is declared on day one. The swap is designed before the real service exists.</div>
+    </div>
+
+    <ul class="parts">
+      <li>
+        <span class="part-name">Ship</span>
+        <span class="part-desc">The portal shipped its whole front half against the mock: checkout, save-card, wallet flows. All of it live, all of it exercised, while the real service was still being built.</span>
+      </li>
+      <li>
+        <span class="part-name">Swap</span>
+        <span class="part-desc">When the real service landed, the cutover was a config change. Not a rewrite of everything built on top.</span>
+      </li>
+      <li>
+        <span class="part-name">Guard</span>
+        <span class="part-desc">The mock-to-real migration ran as its own planned piece of work, under test coverage. Not a leap of faith on the day the dependency showed up.</span>
+      </li>
+    </ul>
+
+    <blockquote class="pull-quote">The dependency arrived late. The work never waited for it.</blockquote>
+  </section>
+
+  <!-- 3. PATTERN 2 -->
+  <section class="reveal">
+    <div class="section-label">Pattern 2</div>
+    <h2>Shadow mode: don't switch. Run both.</h2>
+
+    <div class="prose">
+      <p>A cutover is usually imagined as a switch with two positions. The useful version has three.</p>
+    </div>
+
+    <div class="switch" style="margin-top: 24px;">
+      <div class="switch-pos">
+        <div class="switch-name">Legacy</div>
+        <ul>
+          <li>Serves the old path</li>
+          <li class="off">New path runs</li>
+          <li class="off">Differences logged</li>
+        </ul>
+      </div>
+      <div class="switch-pos active">
+        <div class="switch-name">Shadow</div>
+        <ul>
+          <li>Serves the old path</li>
+          <li>New path runs in parallel</li>
+          <li>Every difference logged</li>
+        </ul>
+      </div>
+      <div class="switch-pos">
+        <div class="switch-name">New</div>
+        <ul>
+          <li class="off">Old path runs</li>
+          <li>Serves the new path</li>
+          <li class="off">Differences logged</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Shadow is the position that earns its keep. Users still get the legacy answer, so nothing visible changes. But every request also runs the new path in parallel, and every field that disagrees gets logged: what differed, where, and by how much. You get the full weight of production traffic as a test suite, without a single user being exposed to the result.</p>
+      <p>Here is what the soak caught on live traffic, mid-migration.</p>
+    </div>
+
+    <div class="compare" style="margin-top: 24px;">
+      <div class="compare-col bad">
+        <div class="compare-head">Looked like</div>
+        <div class="compare-big">6 bugs</div>
+        <ul>
+          <li>Six fields diverging between old and new</li>
+          <li>On live traffic, mid-migration</li>
+          <li>Cutover-week nightmare fuel</li>
+        </ul>
+      </div>
+      <div class="compare-col good">
+        <div class="compare-head">Traced to</div>
+        <div class="compare-big">0 bugs</div>
+        <ul>
+          <li>Every divergence came from stale test data, not code</li>
+          <li>Investigated field by field</li>
+          <li>Cleared before anyone switched</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Six divergences that turned out to be zero bugs is not a wasted week. It is the week you would otherwise have spent after the switch, with customers on the phone, trying to work out which of the six were real.</p>
+    </div>
+
+    <blockquote class="pull-quote">Production traffic becomes the test suite. Nobody notices.</blockquote>
+  </section>
+
+  <!-- 4. PATTERN 3 -->
+  <section class="reveal">
+    <div class="section-label">Pattern 3</div>
+    <h2>Shim the old endpoints</h2>
+
+    <div class="prose">
+      <p>External callers were built against the legacy endpoints years ago. You can't make other people redeploy on your schedule, and some of those integrations belong to insurers, who have their own change processes and their own definition of "soon".</p>
+    </div>
+
+    <div class="flow" style="margin-top: 24px;">
+      <div class="flow-panel">
+        <div class="flow-name">External callers</div>
+        <div class="flow-desc">Unchanged. Same code they shipped years ago, same URLs, same request shapes.</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-panel shim">
+        <div class="flow-name">Legacy surface</div>
+        <div class="flow-desc">Same URLs, same shapes. Now thin shims that translate and forward.</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-panel">
+        <div class="flow-name">New services</div>
+        <div class="flow-desc">The real logic. The only place behaviour actually lives.</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>The old surface stays up. Thin shims accept the legacy request shape and forward to the new services. The contract is honoured to the byte; the implementation behind it is gone. When an insurer eventually does move to the new API, that's their project, on their timeline, and nothing on our side is waiting for it.</p>
+    </div>
+
+    <blockquote class="pull-quote">Callers never know the backend changed.</blockquote>
+  </section>
+
+  <!-- 5. THE SHAPE -->
+  <section class="reveal">
+    <div class="section-label">The Shape</div>
+    <h2>Three patterns, one principle</h2>
+
+    <ul class="principles">
+      <li>
+        <span class="p-name">Mock the upstream</span>
+        <span class="p-desc">Build before the dependency exists.</span>
+      </li>
+      <li>
+        <span class="p-name">Shadow mode</span>
+        <span class="p-desc">Verify before the switch.</span>
+      </li>
+      <li>
+        <span class="p-name">Shim the endpoints</span>
+        <span class="p-desc">Switch without breaking anyone.</span>
+      </li>
+    </ul>
+
+    <div class="prose">
+      <p>Each one puts a fixed boundary between something that is changing and something that must not notice. The mock fixes the interface above a service that isn't there yet. Shadow fixes the response users see while the implementation underneath is swapped. The shim fixes the URL and payload shape while everything behind it is replaced.</p>
+    </div>
+
+    <blockquote class="pull-quote">The boundary holds still while everything behind it moves.</blockquote>
+  </section>
+
+  <!-- 6. WHERE THE AI FITS -->
+  <section class="reveal">
+    <div class="section-label">Where the AI Fits</div>
+    <h2>Fast hands, borrowed eyes</h2>
+
+    <div class="prose">
+      <p>The AI writes the mocks, the shadow comparison, the shims. This is faithful-interface work: take an existing contract and produce something that honours it exactly, over and over, for every endpoint and every field. It is tedious for a person and exactly what the model is fast at.</p>
+      <p>But it is only faithful to interfaces it has read. A mock built from a description of the upstream is a guess with a nice API. A shim built from memory of the legacy endpoint will drift from it in a dozen small ways, and the callers will find every one.</p>
+      <p>So every one of these patterns starts with the real legacy source in context, never a description of it. That is <a href="/writing/legacy-migration-verification/">Part 1's lesson</a> applied: the model doesn't describe the system from memory. It reads it, or it doesn't speak.</p>
+    </div>
+  </section>
+
+  <!-- 7. THE POINT -->
+  <section class="reveal">
+    <div class="section-label">The Point</div>
+    <h2>Build the seam first. Move the system behind it.</h2>
+
+    <div class="prose">
+      <p>Greenfield ships by deploying. Legacy ships by transitioning, and the transition is a design artefact of its own: the seams, the switch positions, the soak, the rollback path. It deserves the same care as the code it's carrying.</p>
+      <p>None of it is throwaway, either. The config seam that let the portal ship against a mock is the same seam that will let the next upstream be replaced. The shadow comparison is a parity harness you get to keep. And the seams you cut for the migration become the module boundaries of the system you keep.</p>
+    </div>
+
+    <blockquote class="pull-quote closing">Build the seam first. Move the system behind it.</blockquote>
+
+    <div class="prose" style="margin-top: 40px;">
+      <p><strong>Part 3 coming</strong> — the discipline: specs, logs as truth, and a fresh session for every spec.</p>
+    </div>
+  </section>
+
+  <!-- SERIES NAV -->
+  <section class="reveal">
+    <div class="series-nav">
+      <div class="series-nav-title">AI for Legacy Migration: Field Notes</div>
+      <ol class="series-list">
+        <li><span class="s-part">Part 1</span><a href="/writing/legacy-migration-verification/">Most AI coding demos are greenfield</a></li>
+        <li><span class="s-part">Part 2</span><span class="current">The rewrite isn't the hard part. The cutover is.</span></li>
+        <li><span class="s-part">Part 3</span><span class="soon">The discipline: specs, logs as truth, and a fresh session for every spec</span></li>
+      </ol>
+    </div>
+
+    <div class="series-pager">
+      <a class="pager-link prev" href="/writing/legacy-migration-verification/">
+        <span class="pager-label">Previous · Part 1</span>
+        <span class="pager-title">← Most AI coding demos are greenfield</span>
+      </a>
+      <span class="pager-link next disabled">
+        <span class="pager-label">Next · Part 3</span>
+        <span class="pager-title">Coming soon</span>
+      </span>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <div class="entry-links">
+      <a href="/writing/" class="entry-link entry-link-back">Back to writing</a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-content">
+      <p><a href="/">Ben Marino · benmarino.dev</a></p>
+      <div class="footer-links">
+        <a href="mailto:ben@mindsetcoach.app">Email</a>
+        <a href="https://www.linkedin.com/in/bemarino" target="_blank">LinkedIn</a>
+        <a href="https://github.com/ben-marino" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
