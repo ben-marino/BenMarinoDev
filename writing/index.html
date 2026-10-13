@@ -321,6 +321,13 @@
   // To publish a new entry, add one object here (newest first):
   //   { title, desc, url, meta }
   //   meta = "Category · Month Year"
+  //
+  // Every entry page under /writing/<slug>/index.html must carry, in <head>
+  // alongside its og: tags:
+  //   <meta property="og:type" content="article">
+  //   <meta property="article:author" content="Ben Marino">
+  //   <meta property="article:published_time" content="YYYY-MM-DD">
+  // Copy the <head> of an existing entry page when starting a new one.
   // ─────────────────────────────────────────────────────────────────────
   const ENTRIES = [
     {
@@ -363,7 +370,7 @@
       title: 'Digital Wellness & the Socially Fed Pyramid',
       desc:  'Master\'s thesis — surveyed 136 participants on digital wellness and performance.',
       url:   '#',
-      meta:  'Thesis · 2025',
+      meta:  'Thesis · 2022',
     },
   ];
 
